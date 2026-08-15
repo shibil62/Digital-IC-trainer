@@ -1,0 +1,1157 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Digital IC Trainer — Lab Simulator</title>
+<style>
+  :root{
+    --pcb:#174A3A;
+    --pcb-dark:#0f3529;
+    --breadboard:#F1EFE5;
+    --ic-black:#171717;
+    --terminal:#202020;
+    --label:#E7E7E7;
+    --casing:#D8D0C1;
+    --casing-dark:#bdb29d;
+    --red:#E53935;
+    --green:#22A447;
+    --blue:#2474D8;
+    --yellow:#F2C94C;
+    --orange:#F2994A;
+    --black:#151515;
+    --white:#f4f4f0;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;height:100%;background:#0c1210;font-family:'Segoe UI',Roboto,Arial,sans-serif;overflow:hidden;}
+  #app{display:flex;flex-direction:column;height:100vh;}
+
+  /* ---------- Toolbar ---------- */
+  #toolbar{
+    display:flex;align-items:center;gap:10px;flex-wrap:wrap;
+    background:linear-gradient(180deg,#20241f,#171a16);
+    border-bottom:2px solid #3a4038;
+    padding:8px 14px;color:var(--label);z-index:20;
+  }
+  #toolbar h1{
+    font-size:15px;letter-spacing:2px;margin:0 14px 0 0;color:#e8e4d5;
+    font-weight:700;text-transform:uppercase;white-space:nowrap;
+  }
+  #toolbar .grp{display:flex;align-items:center;gap:6px;padding:4px 8px;background:#00000030;border-radius:6px;}
+  #toolbar label{font-size:11px;opacity:.75;text-transform:uppercase;letter-spacing:.5px;}
+  select,button{
+    font-family:inherit;font-size:12.5px;background:#2b2f28;color:#eee;
+    border:1px solid #454a41;border-radius:5px;padding:5px 9px;cursor:pointer;
+  }
+  button:hover{background:#3a3f36;}
+  button:active{transform:translateY(1px);}
+  button:disabled{opacity:.4;cursor:not-allowed;}
+  button:disabled:hover{background:#2b2f28;}
+  button.primary{background:#2a6b4a;border-color:#3d8a63;}
+  button.primary:hover{background:#33804f;}
+  button.danger{background:#5a2626;border-color:#7a3232;}
+  button.danger:hover{background:#6e2d2d;}
+  .swatches{display:flex;gap:4px;}
+  .swatch{
+    width:20px;height:20px;border-radius:50%;border:2px solid #00000055;cursor:pointer;
+    box-shadow:inset 0 1px 1px #ffffff55, 0 1px 2px #0007;
+  }
+  .swatch.sel{outline:2px solid #fff;outline-offset:2px;}
+  #powerBtnWrap button{font-weight:700;}
+  #status{font-size:11.5px;color:#9adcb0;margin-left:auto;white-space:nowrap;}
+  #status.warn{color:#f2b64c;}
+
+  /* ---------- Main layout ---------- */
+  #main{flex:1;display:flex;min-height:0;}
+  #boardWrap{flex:1;position:relative;overflow:hidden;background:radial-gradient(circle at 50% 30%, #26302a, #0b0f0c 80%);}
+  #boardSvg{width:100%;height:100%;display:block;cursor:grab;}
+  #boardSvg.dragging{cursor:grabbing;}
+
+  #zoomCtl{position:absolute;bottom:14px;right:14px;display:flex;flex-direction:column;gap:6px;z-index:10;}
+  #zoomCtl button{width:34px;height:34px;font-size:16px;border-radius:8px;}
+
+  #sidepanel{
+    width:300px;background:#14180f;border-left:2px solid #2f342a;color:#dcd9cc;
+    padding:12px;overflow-y:auto;font-size:12.5px;line-height:1.5;
+  }
+  #sidepanel h2{font-size:12px;text-transform:uppercase;letter-spacing:1px;color:#a9c9ac;margin:14px 0 6px;border-bottom:1px solid #2f342a;padding-bottom:4px;}
+  #sidepanel h2:first-child{margin-top:0;}
+  #icInfoBox{background:#1d221a;border:1px solid #333a2c;border-radius:6px;padding:8px;white-space:pre;font-family:'Courier New',monospace;font-size:11px;color:#c9e6cc;min-height:40px;}
+  .exp{background:#1d221a;border:1px solid #333a2c;border-radius:6px;padding:7px 9px;margin-bottom:6px;}
+  .exp b{color:#e8d99a;}
+  .exp small{opacity:.75;display:block;margin-top:2px;}
+  #ttResult{margin-top:8px;font-family:'Courier New',monospace;font-size:11px;white-space:pre;background:#1d221a;border:1px solid #333a2c;border-radius:6px;padding:8px;color:#c9e6cc;}
+  .hint{font-size:11px;opacity:.7;margin-top:4px;}
+  #warnBanner{
+    position:absolute;top:10px;left:50%;transform:translateX(-50%);
+    background:#5a2f16;color:#ffd7a8;border:1px solid #a85d2a;border-radius:6px;
+    padding:6px 14px;font-size:12.5px;z-index:15;display:none;box-shadow:0 3px 10px #0007;
+  }
+
+  /* SVG element helper classes */
+  .pin{cursor:pointer;transition:fill 100ms ease, r 100ms ease;}
+  .pin:hover{filter:brightness(1.6);}
+  .pin.pinPending{stroke:#000;stroke-width:1.5px;}
+  .pin.connected{stroke:#ffffffb0;stroke-width:1px;}
+  .pinHit{cursor:pointer;transition:fill 140ms ease;}
+  .pinHit.flash{fill:#ffffff70;}
+  .lbl{fill:var(--label);font-family:'Segoe UI',Arial,sans-serif;font-size:9px;letter-spacing:.4px;user-select:none;pointer-events:none;}
+  .lblBig{fill:var(--label);font-size:12px;font-weight:700;letter-spacing:1.5px;user-select:none;pointer-events:none;}
+  .wireline{fill:none;stroke-linecap:round;cursor:pointer;transition:stroke-width 90ms ease, filter 90ms ease;}
+  .wireline:hover{stroke-width:8;filter:brightness(1.4) drop-shadow(0 0 3px #000c);}
+  .wireshadow{fill:none;stroke:#000;stroke-opacity:.35;stroke-linecap:round;}
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="toolbar">
+    <h1>Digital IC Trainer</h1>
+    <div class="grp" id="powerBtnWrap">
+      <button id="powerBtn">⏻ POWER: OFF</button>
+    </div>
+    <div class="grp">
+      <label>IC</label>
+      <select id="icSelect"></select>
+      <button id="placeIcBtn" class="primary">Place IC</button>
+    </div>
+    <div class="grp">
+      <label>Wire</label>
+      <div class="swatches" id="swatches"></div>
+    </div>
+    <div class="grp">
+      <button id="deleteWireBtn">Delete Selected Wire</button>
+      <button id="clearWiresBtn">Clear Wires</button>
+    </div>
+    <div class="grp">
+      <button id="undoBtn" title="Ctrl+Z" disabled>↶ Undo</button>
+    </div>
+    <div class="grp">
+      <button id="resetBtn" class="danger">Reset Board</button>
+    </div>
+    <div id="status">Place an IC, then wire VCC/GND and your inputs/output — power on last, like in the lab.</div>
+  </div>
+
+  <div id="main">
+    <div id="boardWrap">
+      <div id="warnBanner">⚠ Possible short circuit: two outputs are connected together.</div>
+      <svg id="boardSvg" viewBox="0 0 1500 950" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <linearGradient id="pcbGrad" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0%" stop-color="#1c5744"/>
+            <stop offset="55%" stop-color="#174A3A"/>
+            <stop offset="100%" stop-color="#0f3529"/>
+          </linearGradient>
+          <linearGradient id="casingGrad" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stop-color="#e4dcc9"/>
+            <stop offset="100%" stop-color="#c9c0ac"/>
+          </linearGradient>
+          <radialGradient id="ledGlow" cx="50%" cy="45%" r="60%">
+            <stop offset="0%" stop-color="#ffffff" stop-opacity=".9"/>
+            <stop offset="35%" stop-color="currentColor" stop-opacity=".9"/>
+            <stop offset="100%" stop-color="currentColor" stop-opacity="0"/>
+          </radialGradient>
+          <radialGradient id="socketGrad" cx="35%" cy="30%" r="75%">
+            <stop offset="0%" stop-color="#4a4a4a"/>
+            <stop offset="45%" stop-color="#232323"/>
+            <stop offset="100%" stop-color="#0a0a0a"/>
+          </radialGradient>
+          <filter id="softShadow" x="-30%" y="-30%" width="160%" height="160%">
+            <feDropShadow dx="0" dy="3" stdDeviation="4" flood-color="#000" flood-opacity="0.45"/>
+          </filter>
+          <filter id="tinyShadow" x="-50%" y="-50%" width="200%" height="200%">
+            <feDropShadow dx="0" dy="1" stdDeviation="1" flood-color="#000" flood-opacity="0.6"/>
+          </filter>
+        </defs>
+
+        <g id="viewport">
+          <!-- casing -->
+          <rect x="10" y="10" width="1480" height="930" rx="30" fill="url(#casingGrad)" stroke="#8f8672" stroke-width="2" filter="url(#softShadow)"/>
+          <!-- pcb -->
+          <rect x="42" y="42" width="1416" height="866" rx="16" fill="url(#pcbGrad)" stroke="#0a2a20" stroke-width="2"/>
+          <rect x="42" y="42" width="1416" height="866" rx="16" fill="none" stroke="#3a7a63" stroke-width="1" stroke-opacity=".3"/>
+
+          <text x="68" y="76" class="lblBig" font-size="19">DIGITAL IC TRAINER</text>
+          <text x="68" y="93" class="lbl" font-size="10" fill="#9fd6bd">SIM •  BREADBOARD · LOGIC SWITCHES · LED OUTPUT · POWER</text>
+          <text x="1432" y="893" text-anchor="end" class="lbl" font-size="9" fill="#6fa78f">SCIENTIFIC-STYLE DIGITAL TRAINER — WEB SIM</text>
+
+          <g id="dynamicLayer"></g>
+        </g>
+      </svg>
+      <div id="zoomCtl">
+        <button id="zoomIn">+</button>
+        <button id="zoomReset">⤾</button>
+        <button id="zoomOut">−</button>
+      </div>
+    </div>
+
+    <div id="sidepanel">
+      <h2>IC Reference</h2>
+      <div id="icInfoBox">Select an IC above to see its pinout.</div>
+
+      <h2>Workflow</h2>
+      <div class="hint">1. Place IC(s) on the breadboard (they don't need power yet).  2. Wire VCC (pin 14) and GND (pin 7) — each IC pin is its own silver dot on the chip; hover any pin to see if it's VCC/GND/INPUT/OUTPUT.  3. Wire the logic switches to the input pins.  4. Wire the gate's OUTPUT pin (e.g. pin 3 on a 7408) to an LED.  5. Turn POWER ON last and toggle switches to test.<br><br>Once powered, every connected pin that's logic-HIGH glows faint green — even mid-circuit — so you can trace the signal from switch → input pin → output pin → LED. Each chip also gets a border around it: red = not properly powered, green = VCC+GND are correctly wired.</div>
+
+      <h2>Practice Experiments</h2>
+      <div class="exp"><b>Exp 1:</b> F = AB <small>IC: 7408</small></div>
+      <div class="exp"><b>Exp 2:</b> F = A + B <small>IC: 7432</small></div>
+      <div class="exp"><b>Exp 3:</b> F = A' <small>IC: 7404</small></div>
+      <div class="exp"><b>Exp 4:</b> F = A'B' + B'C' <small>ICs: 7404 + 7408 + 7432</small></div>
+      <div class="exp"><b>Exp 5:</b> F = AB + CD <small>ICs: 7408 + 7432</small></div>
+      <div class="exp"><b>Exp 6:</b> F = (A+B)' <small>IC: 7402</small></div>
+
+      <h2>Truth Table Test</h2>
+      <div class="hint">Wires up to 4 switches and one LED, then auto-cycles every input combination.</div>
+      <button id="ttBtn" class="primary" style="width:100%;margin-top:6px;">Test All Combinations</button>
+      <div id="ttResult">Not run yet.</div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+"use strict";
+const SVGNS="http://www.w3.org/2000/svg";
+const svg=document.getElementById("boardSvg");
+const viewport=document.getElementById("viewport");
+const dyn=document.getElementById("dynamicLayer");
+const statusEl=document.getElementById("status");
+const warnBanner=document.getElementById("warnBanner");
+
+/* ============================= IC LIBRARY ============================= */
+const P8={1:"1A",2:"1B",3:"1Y",4:"2A",5:"2B",6:"2Y",7:"GND",8:"3Y",9:"3A",10:"3B",11:"4Y",12:"4A",13:"4B",14:"VCC"};
+const G8=[{a:1,b:2,y:3},{a:4,b:5,y:6},{a:9,b:10,y:8},{a:12,b:13,y:11}];
+const IC_LIBRARY={
+  "7400":{name:"Quad 2-Input NAND Gate",vcc:14,gnd:7,pinNames:P8,gates:G8,fn:(a,b)=> (a&&b)?0:1},
+  "7402":{name:"Quad 2-Input NOR Gate",vcc:14,gnd:7,
+    pinNames:{1:"1Y",2:"1A",3:"1B",4:"2Y",5:"2A",6:"2B",7:"GND",8:"3B",9:"3A",10:"3Y",11:"4B",12:"4A",13:"4Y",14:"VCC"},
+    gates:[{a:2,b:3,y:1},{a:5,b:6,y:4},{a:9,b:8,y:10},{a:12,b:11,y:13}],
+    fn:(a,b)=> (a||b)?0:1},
+  "7404":{name:"Hex Inverter (NOT)",vcc:14,gnd:7,
+    pinNames:{1:"1A",2:"1Y",3:"2A",4:"2Y",5:"3A",6:"3Y",7:"GND",8:"4Y",9:"4A",10:"5Y",11:"5A",12:"6Y",13:"6A",14:"VCC"},
+    gates:[{a:1,y:2},{a:3,y:4},{a:5,y:6},{a:9,y:8},{a:11,y:10},{a:13,y:12}],
+    fn:(a)=> a?0:1},
+  "7408":{name:"Quad 2-Input AND Gate",vcc:14,gnd:7,pinNames:P8,gates:G8,fn:(a,b)=> (a&&b)?1:0},
+  "7432":{name:"Quad 2-Input OR Gate",vcc:14,gnd:7,pinNames:P8,gates:G8,fn:(a,b)=> (a||b)?1:0},
+  "7486":{name:"Quad 2-Input XOR Gate",vcc:14,gnd:7,pinNames:P8,gates:G8,fn:(a,b)=> (a!==b)?1:0}
+};
+
+/* ============================= STATE ============================= */
+let powerOn=false;
+let currentWireColor="#22A447";
+let pendingWire=null;    // {node, x, y}
+let selectedWireIdx=-1;
+let wires=[];            // {a:{node,x,y}, b:{node,x,y}, color, el, shadowEl}
+const switches=[];       // {id,label,node,state,x,y}
+const leds=[];           // {id,label,node,x,y}
+const statePins=[];      // {node, hitEl, dotEl} — every clickable pin on the board, for live signal glow
+
+const NUM_COLS=29;       // breadboard columns (0..28)
+const BB_X0=100, BB_COLSPAN=720; // usable x range for holes
+const colX=(i)=> BB_X0 + i*(BB_COLSPAN/(NUM_COLS-1));
+const TOP_ROWS=[140,153,166,179,192];
+const BOT_ROWS=[248,261,274,287,300];
+
+const ICSLOTS=[{start:1},{start:11},{start:21}]; // each spans 7 cols
+const placedICs=[null,null,null];
+
+const allNodeIds=new Set();
+function regNode(id){ allNodeIds.add(id); }
+
+/* ============================= BUILD: BREADBOARD ============================= */
+const bbHoles={}; // node -> array of {x,y}
+function bbNode(col,half){ return "bb"+col+"_"+half; }
+
+function buildBreadboard(){
+  const g=document.createElementNS(SVGNS,"g");
+  g.setAttribute("id","breadboard");
+  // panel
+  const rect=document.createElementNS(SVGNS,"rect");
+  rect.setAttribute("x",78); rect.setAttribute("y",118);
+  rect.setAttribute("width",760); rect.setAttribute("height",210);
+  rect.setAttribute("rx",6); rect.setAttribute("fill","var(--breadboard)");
+  rect.setAttribute("stroke","#b9b39f"); rect.setAttribute("stroke-width","2");
+  rect.setAttribute("filter","url(#softShadow)");
+  g.appendChild(rect);
+
+  const label=document.createElementNS(SVGNS,"text");
+  label.setAttribute("x",78); label.setAttribute("y",110); label.setAttribute("class","lbl"); label.setAttribute("fill","#dfe6de"); label.textContent="BREADBOARD";
+  g.appendChild(label);
+
+  // center channel decoration
+  const channel=document.createElementNS(SVGNS,"rect");
+  channel.setAttribute("x",78); channel.setAttribute("y",210); channel.setAttribute("width",760); channel.setAttribute("height",30);
+  channel.setAttribute("fill","#dcd8c8");
+  g.appendChild(channel);
+  [220,228].forEach(y=>{
+    const l=document.createElementNS(SVGNS,"line");
+    l.setAttribute("x1",84);l.setAttribute("x2",832);l.setAttribute("y1",y);l.setAttribute("y2",y);
+    l.setAttribute("stroke","#b9b39f");l.setAttribute("stroke-width","1");
+    g.appendChild(l);
+  });
+
+  for(let i=0;i<NUM_COLS;i++){
+    const x=colX(i);
+    TOP_ROWS.forEach((y,ri)=>{
+      const node=bbNode(i,"top"); regNode(node);
+      addHole(g,x,y,node,`Breadboard col ${i+1} (top block)`);
+    });
+    BOT_ROWS.forEach((y,ri)=>{
+      const node=bbNode(i,"bot"); regNode(node);
+      addHole(g,x,y,node,`Breadboard col ${i+1} (bottom block)`);
+    });
+    if(i%5===0){
+      const t=document.createElementNS(SVGNS,"text");
+      t.setAttribute("x",x); t.setAttribute("y",132); t.setAttribute("class","lbl");
+      t.setAttribute("text-anchor","middle"); t.setAttribute("font-size","7"); t.setAttribute("fill","#8a8672");
+      t.textContent=i+1;
+      g.appendChild(t);
+    }
+  }
+  dyn.appendChild(g);
+}
+
+// Shared pin builder: an invisible larger "hit area" sits over a smaller visible dot,
+// so tiny holes/terminals are still easy to click. Clicking flashes the hit area and
+// handlePinClick() takes the *dot element itself* so we can style it directly (pending
+// highlight, connected ring) instead of re-querying the DOM.
+function makePin(g,x,y,node,tooltip,visR,fillColor){
+  const hit=document.createElementNS(SVGNS,"circle");
+  hit.setAttribute("cx",x); hit.setAttribute("cy",y); hit.setAttribute("r",Math.max(visR+5,8));
+  hit.setAttribute("fill","transparent"); hit.setAttribute("class","pinHit");
+  g.appendChild(hit);
+
+  const c=document.createElementNS(SVGNS,"circle");
+  c.setAttribute("cx",x); c.setAttribute("cy",y); c.setAttribute("r",visR);
+  c.setAttribute("fill",fillColor); c.setAttribute("class","pin");
+  c.dataset.node=node; c.dataset.x=x; c.dataset.y=y; c.dataset.orig=fillColor; c.dataset.origR=visR;
+  const title=document.createElementNS(SVGNS,"title"); title.textContent=tooltip;
+  c.appendChild(title);
+  g.appendChild(c);
+
+  const onClick=(e)=>{
+    e.stopPropagation();
+    hit.classList.add("flash");
+    setTimeout(()=>hit.classList.remove("flash"),220);
+    handlePinClick(node,x,y,c);
+  };
+  hit.addEventListener("click",onClick);
+  c.addEventListener("click",onClick);
+  statePins.push({node,hitEl:hit,dotEl:c});
+  return c;
+}
+
+function addHole(g,x,y,node,tooltip){
+  makePin(g,x,y,node,tooltip,3.1,"#8f8a76");
+}
+
+function pinRole(def,p){
+  if(p===def.vcc) return "VCC (+5V) — wire this to the VCC terminal";
+  if(p===def.gnd) return "GND (0V) — wire this to the GND terminal";
+  if(def.gates.some(gt=>gt.y===p)) return "OUTPUT — wire this to an LED or the next gate's input";
+  return "INPUT — wire this to a logic switch or another gate's output";
+}
+
+/* ============================= IC PLACEMENT ============================= */
+function icSlotFree(idx){ return placedICs[idx]===null; }
+
+function pinNodeMapForSlot(start){
+  const map={};
+  for(let p=1;p<=7;p++) map[p]=bbNode(start+p-1,"bot");
+  for(let p=8;p<=14;p++) map[p]=bbNode(start+(14-p),"top");
+  return map;
+}
+
+function placeICAtSlot(type,slotIdx){
+  const def=IC_LIBRARY[type];
+  const slot=ICSLOTS[slotIdx];
+  const pinNodeMap=pinNodeMapForSlot(slot.start);
+  const ic={type,def,pinNodeMap,slotIdx,powered:false};
+  placedICs[slotIdx]=ic;
+  renderIC(ic,slot);
+  return ic;
+}
+function placeIC(type){
+  const def=IC_LIBRARY[type];
+  if(!def) return;
+  const slotIdx=placedICs.findIndex(x=>x===null);
+  if(slotIdx===-1){ flashStatus("All 3 IC slots are full. Remove one first.",true); return; }
+  pushUndo();
+  placeICAtSlot(type,slotIdx);
+  recompute();
+  flashStatus(`${type} placed in slot ${slotIdx+1}. Wire VCC (pin 14) and GND (pin 7).`,false);
+}
+
+function removeICCore(slotIdx){
+  placedICs[slotIdx]=null;
+  document.getElementById("ic-slot-"+slotIdx)?.remove();
+}
+function removeIC(slotIdx){
+  pushUndo();
+  removeICCore(slotIdx);
+  recompute();
+}
+
+function renderIC(ic,slot){
+  const start=slot.start;
+  const x0=colX(start)-9, x1=colX(start+6)+9;
+  const yTop=192-6, yBot=248+6; // chip spans the gap
+  const g=document.createElementNS(SVGNS,"g");
+  g.setAttribute("id","ic-slot-"+ic.slotIdx);
+
+  const body=document.createElementNS(SVGNS,"rect");
+  body.setAttribute("x",x0); body.setAttribute("y",yTop);
+  body.setAttribute("width",x1-x0); body.setAttribute("height",yBot-yTop);
+  body.setAttribute("rx",4); body.setAttribute("fill","var(--ic-black)");
+  body.setAttribute("stroke","#000"); body.setAttribute("stroke-width","1");
+  body.setAttribute("filter","url(#softShadow)");
+  body.style.pointerEvents="none"; // IMPORTANT: let clicks pass through to the breadboard holes underneath (pins 1-7/8-14 sit right under this body)
+  g.appendChild(body);
+
+  // status border — turns red while unpowered, green once VCC+GND are actually wired and powered.
+  const border=document.createElementNS(SVGNS,"rect");
+  border.setAttribute("id","icborder-"+ic.slotIdx);
+  border.setAttribute("x",x0-2); border.setAttribute("y",yTop-2);
+  border.setAttribute("width",x1-x0+4); border.setAttribute("height",yBot-yTop+4);
+  border.setAttribute("rx",5); border.setAttribute("fill","none");
+  border.setAttribute("stroke","#8a3a3a"); border.setAttribute("stroke-width","2");
+  border.style.pointerEvents="none";
+  g.appendChild(border);
+
+  // notch
+  const notch=document.createElementNS(SVGNS,"circle");
+  notch.setAttribute("cx",x0+10); notch.setAttribute("cy",(yTop+yBot)/2); notch.setAttribute("r",4);
+  notch.setAttribute("fill","#2c2c2c"); notch.setAttribute("stroke","#000");
+  notch.style.pointerEvents="none";
+  g.appendChild(notch);
+
+  // label
+  const t=document.createElementNS(SVGNS,"text");
+  t.setAttribute("x",(x0+x1)/2); t.setAttribute("y",(yTop+yBot)/2+4);
+  t.setAttribute("text-anchor","middle"); t.setAttribute("fill","#d8d8d8");
+  t.setAttribute("font-size","11"); t.setAttribute("font-weight","700");
+  t.style.pointerEvents="none";
+  t.textContent=ic.type;
+  g.appendChild(t);
+
+  // pin legs + numbers + an explicit, clearly visible pin dot for EACH of the 14 pins.
+  // These are drawn on top of the chip body (not hidden underneath it) so a connection
+  // is always visible, and each one is individually clickable — pin 1 through pin 14.
+  for(let p=1;p<=7;p++){
+    const cx=colX(start+p-1);
+    const holeY=BOT_ROWS[0];
+    drawLeg(g,cx,yBot-2,cx,holeY-3);
+    drawPinNum(g,cx,yBot+11,p);
+    const node=ic.pinNodeMap[p];
+    const nm=ic.def.pinNames[p];
+    makePin(g,cx,holeY,node,`${ic.type} Pin ${p} (${nm}) — ${pinRole(ic.def,p)}`,3.6,"#e6e6e6");
+  }
+  for(let p=8;p<=14;p++){
+    const col=start+(14-p);
+    const cx=colX(col);
+    const holeY=TOP_ROWS[4];
+    drawLeg(g,cx,yTop+2,cx,holeY+3);
+    drawPinNum(g,cx,yTop-4,p);
+    const node=ic.pinNodeMap[p];
+    const nm=ic.def.pinNames[p];
+    makePin(g,cx,holeY,node,`${ic.type} Pin ${p} (${nm}) — ${pinRole(ic.def,p)}`,3.6,"#e6e6e6");
+  }
+
+  // remove button
+  const rm=document.createElementNS(SVGNS,"text");
+  rm.setAttribute("x",x1-2); rm.setAttribute("y",yTop-4); rm.setAttribute("text-anchor","end");
+  rm.setAttribute("class","lbl"); rm.setAttribute("fill","#f2b6b6"); rm.setAttribute("font-size","10");
+  rm.style.cursor="pointer";
+  rm.textContent="[remove]";
+  rm.addEventListener("click",(e)=>{e.stopPropagation(); removeIC(ic.slotIdx);});
+  g.appendChild(rm);
+
+  // power warning badge
+  const warn=document.createElementNS(SVGNS,"text");
+  warn.setAttribute("id","warn-"+ic.slotIdx);
+  warn.setAttribute("x",(x0+x1)/2); warn.setAttribute("y",yBot+22);
+  warn.setAttribute("text-anchor","middle"); warn.setAttribute("fill","#f2c94c"); warn.setAttribute("font-size","8.5");
+  warn.textContent="";
+  g.appendChild(warn);
+
+  const title=document.createElementNS(SVGNS,"title");
+  title.textContent=`${ic.type} — ${ic.def.name}`;
+  body.appendChild(title);
+
+  dyn.appendChild(g);
+}
+function drawLeg(g,x1,y1,x2,y2){
+  const l=document.createElementNS(SVGNS,"line");
+  l.setAttribute("x1",x1); l.setAttribute("y1",y1); l.setAttribute("x2",x2); l.setAttribute("y2",y2);
+  l.setAttribute("stroke","#c9c9c9"); l.setAttribute("stroke-width","2");
+  l.style.pointerEvents="none";
+  g.appendChild(l);
+}
+function drawPinNum(g,x,y,p){
+  const t=document.createElementNS(SVGNS,"text");
+  t.setAttribute("x",x); t.setAttribute("y",y); t.setAttribute("text-anchor","middle");
+  t.setAttribute("font-size","7"); t.setAttribute("fill","#cfe8d4");
+  t.style.pointerEvents="none";
+  t.textContent=p;
+  g.appendChild(t);
+}
+
+/* ============================= POWER / GND TERMINALS ============================= */
+function buildPowerSection(){
+  const g=document.createElementNS(SVGNS,"g");
+  const baseX=920, baseY=118;
+  const label=document.createElementNS(SVGNS,"text");
+  label.setAttribute("x",baseX); label.setAttribute("y",baseY-8); label.setAttribute("class","lbl"); label.setAttribute("fill","#dfe6de");
+  label.textContent="POWER SUPPLY";
+  g.appendChild(label);
+
+  const panel=document.createElementNS(SVGNS,"rect");
+  panel.setAttribute("x",baseX); panel.setAttribute("y",baseY); panel.setAttribute("width",270); panel.setAttribute("height",90);
+  panel.setAttribute("rx",6); panel.setAttribute("fill","#123a2d"); panel.setAttribute("stroke","#0a2419");
+  g.appendChild(panel);
+
+  addTerminal(g,baseX+40,baseY+45,"vcc_terminal","VCC / +5V","#E53935","Terminal — VCC (+5V, logic HIGH when powered)");
+  addTerminal(g,baseX+130,baseY+45,"gnd_terminal","GND / 0V","#151515","Terminal — GND (0V, logic LOW)");
+  regNode("vcc_terminal"); regNode("gnd_terminal");
+
+  // power rocker switch
+  const swG=document.createElementNS(SVGNS,"g");
+  swG.setAttribute("id","powerRocker"); swG.style.cursor="pointer";
+  const swBody=document.createElementNS(SVGNS,"rect");
+  swBody.setAttribute("x",baseX+178); swBody.setAttribute("y",baseY+16); swBody.setAttribute("width",26); swBody.setAttribute("height",44);
+  swBody.setAttribute("rx",4); swBody.setAttribute("fill","#3a3a3a"); swBody.setAttribute("stroke","#111");
+  swG.appendChild(swBody);
+  const swKnob=document.createElementNS(SVGNS,"rect");
+  swKnob.setAttribute("id","powerKnob");
+  swKnob.setAttribute("x",baseX+180); swKnob.setAttribute("y",baseY+38); swKnob.setAttribute("width",22); swKnob.setAttribute("height",20);
+  swKnob.setAttribute("rx",3); swKnob.setAttribute("fill","var(--red)"); swKnob.setAttribute("stroke","#7a0f0f");
+  swG.appendChild(swKnob);
+  const swLbl=document.createElementNS(SVGNS,"text");
+  swLbl.setAttribute("x",baseX+191); swLbl.setAttribute("y",baseY+70); swLbl.setAttribute("class","lbl");
+  swLbl.setAttribute("text-anchor","middle"); swLbl.textContent="POWER";
+  swG.appendChild(swLbl);
+  swG.addEventListener("click",()=>togglePower());
+  g.appendChild(swG);
+
+  // power indicator lamp
+  const lampLbl=document.createElementNS(SVGNS,"text");
+  lampLbl.setAttribute("x",baseX+238); lampLbl.setAttribute("y",baseY+22); lampLbl.setAttribute("class","lbl");
+  lampLbl.setAttribute("text-anchor","middle"); lampLbl.textContent="PWR";
+  g.appendChild(lampLbl);
+  const lamp=document.createElementNS(SVGNS,"circle");
+  lamp.setAttribute("id","powerLamp");
+  lamp.setAttribute("cx",baseX+238); lamp.setAttribute("cy",baseY+45); lamp.setAttribute("r",7);
+  lamp.setAttribute("fill","#3a1414"); lamp.setAttribute("stroke","#1a0808");
+  lamp.setAttribute("filter","url(#tinyShadow)");
+  g.appendChild(lamp);
+
+  dyn.appendChild(g);
+}
+
+function addTerminal(g,x,y,node,label,ringColor,tooltip){
+  const outer=document.createElementNS(SVGNS,"circle");
+  outer.setAttribute("cx",x); outer.setAttribute("cy",y); outer.setAttribute("r",11);
+  outer.setAttribute("fill","url(#socketGrad)"); outer.setAttribute("stroke",ringColor); outer.setAttribute("stroke-width","2");
+  outer.setAttribute("filter","url(#tinyShadow)");
+  g.appendChild(outer);
+  makePin(g,x,y,node,tooltip,3.6,"#000");
+  const t=document.createElementNS(SVGNS,"text");
+  t.setAttribute("x",x); t.setAttribute("y",y+24); t.setAttribute("text-anchor","middle"); t.setAttribute("class","lbl");
+  t.textContent=label;
+  g.appendChild(t);
+}
+
+/* ============================= IC SLOT GUIDE MARKERS (empty outlines) ============================= */
+function buildSlotGuides(){
+  const g=document.createElementNS(SVGNS,"g");
+  ICSLOTS.forEach((slot,idx)=>{
+    const x0=colX(slot.start)-9, x1=colX(slot.start+6)+9;
+    const r=document.createElementNS(SVGNS,"rect");
+    r.setAttribute("id","guide-"+idx);
+    r.setAttribute("x",x0); r.setAttribute("y",186); r.setAttribute("width",x1-x0); r.setAttribute("height",68);
+    r.setAttribute("rx",4); r.setAttribute("fill","none"); r.setAttribute("stroke","#5c7a6a"); r.setAttribute("stroke-dasharray","3,3");
+    r.setAttribute("stroke-width","1");
+    g.appendChild(r);
+  });
+  dyn.appendChild(g);
+}
+function updateSlotGuides(){
+  ICSLOTS.forEach((slot,idx)=>{
+    const el=document.getElementById("guide-"+idx);
+    if(el) el.style.display = placedICs[idx] ? "none" : "block";
+  });
+}
+
+/* ============================= LOGIC SWITCHES ============================= */
+function buildSwitches(){
+  const g=document.createElementNS(SVGNS,"g");
+  const baseX=78, baseY=420, w=620, h=120;
+  const panel=document.createElementNS(SVGNS,"rect");
+  panel.setAttribute("x",baseX); panel.setAttribute("y",baseY); panel.setAttribute("width",w); panel.setAttribute("height",h);
+  panel.setAttribute("rx",6); panel.setAttribute("fill","#123a2d"); panel.setAttribute("stroke","#0a2419");
+  g.appendChild(panel);
+  const label=document.createElementNS(SVGNS,"text");
+  label.setAttribute("x",baseX); label.setAttribute("y",baseY-8); label.setAttribute("class","lbl"); label.setAttribute("fill","#dfe6de");
+  label.textContent="LOGIC SWITCHES  —  connect from the pin above each switch";
+  g.appendChild(label);
+
+  const names=["A","B","C","D","E","F","G","H"];
+  const usableW=w-70, spacing=usableW/(names.length-1);
+  names.forEach((name,i)=>{
+    const x=baseX+35+i*spacing, y=baseY+62;
+    const node="sw_"+name;
+    regNode(node);
+    const sw={id:name,label:name,node,state:false,x,y};
+    switches.push(sw);
+    drawSwitch(g,sw,baseY);
+  });
+  dyn.appendChild(g);
+}
+
+function drawSwitch(g,sw,panelTop){
+  const pinY=panelTop+22, trackY=sw.y, labelY=panelTop+96;
+
+  const stub=document.createElementNS(SVGNS,"line");
+  stub.setAttribute("x1",sw.x); stub.setAttribute("y1",pinY+5); stub.setAttribute("x2",sw.x); stub.setAttribute("y2",trackY-9);
+  stub.setAttribute("stroke","#555"); stub.setAttribute("stroke-width","1.4");
+  g.appendChild(stub);
+
+  const track=document.createElementNS(SVGNS,"rect");
+  track.setAttribute("x",sw.x-22); track.setAttribute("y",trackY-9); track.setAttribute("width",44); track.setAttribute("height",18);
+  track.setAttribute("rx",9); track.setAttribute("fill","#0e0e0e"); track.setAttribute("stroke","#333");
+  track.style.cursor="pointer";
+  track.addEventListener("click",()=>toggleSwitch(sw.id));
+  g.appendChild(track);
+
+  const knob=document.createElementNS(SVGNS,"circle");
+  knob.setAttribute("id","swknob-"+sw.id);
+  knob.setAttribute("cy",trackY); knob.setAttribute("r",7);
+  knob.setAttribute("fill","#d8d8d8"); knob.setAttribute("stroke","#888");
+  knob.setAttribute("filter","url(#tinyShadow)");
+  knob.style.cursor="pointer";
+  knob.addEventListener("click",()=>toggleSwitch(sw.id));
+  positionKnob(knob,sw);
+  g.appendChild(knob);
+
+  const lbl=document.createElementNS(SVGNS,"text");
+  lbl.setAttribute("x",sw.x); lbl.setAttribute("y",labelY); lbl.setAttribute("class","lbl"); lbl.setAttribute("font-weight","700");
+  lbl.setAttribute("text-anchor","middle");
+  lbl.textContent=sw.label;
+  g.appendChild(lbl);
+
+  makePin(g,sw.x,pinY,sw.node,`Logic Input ${sw.label}`,3.6,"#8f8a76");
+}
+function positionKnob(knob,sw){ knob.setAttribute("cx", sw.state? sw.x+8 : sw.x-8); knob.setAttribute("fill", sw.state? "#8fe0a6":"#d8d8d8"); }
+function toggleSwitch(id){
+  pushUndo();
+  const sw=switches.find(s=>s.id===id);
+  sw.state=!sw.state;
+  positionKnob(document.getElementById("swknob-"+id),sw);
+  recompute();
+}
+
+/* ============================= LEDs ============================= */
+function buildLEDs(){
+  const g=document.createElementNS(SVGNS,"g");
+  const baseX=740, baseY=420, w=340, h=120;
+  const panel=document.createElementNS(SVGNS,"rect");
+  panel.setAttribute("x",baseX); panel.setAttribute("y",baseY); panel.setAttribute("width",w); panel.setAttribute("height",h);
+  panel.setAttribute("rx",6); panel.setAttribute("fill","#123a2d"); panel.setAttribute("stroke","#0a2419");
+  g.appendChild(panel);
+  const label=document.createElementNS(SVGNS,"text");
+  label.setAttribute("x",baseX); label.setAttribute("y",baseY-8); label.setAttribute("class","lbl"); label.setAttribute("fill","#dfe6de");
+  label.textContent="LED OUTPUT  —  connect from the pin above each LED";
+  g.appendChild(label);
+
+  const count=4;
+  const usableW=w-80, spacing=usableW/(count-1);
+  for(let i=1;i<=count;i++){
+    const x=baseX+40+(i-1)*spacing, y=baseY+62;
+    const node="led_"+i;
+    regNode(node);
+    const led={id:i,label:"OUT"+i,node,x,y};
+    leds.push(led);
+    drawLED(g,led,baseY);
+  }
+  dyn.appendChild(g);
+}
+function drawLED(g,led,panelTop){
+  const pinY=panelTop+22, bulbY=led.y, labelY=panelTop+96;
+
+  const wireStub=document.createElementNS(SVGNS,"line");
+  wireStub.setAttribute("x1",led.x); wireStub.setAttribute("y1",pinY+5); wireStub.setAttribute("x2",led.x); wireStub.setAttribute("y2",bulbY-8);
+  wireStub.setAttribute("stroke","#555"); wireStub.setAttribute("stroke-width","1.4");
+  g.appendChild(wireStub);
+
+  const glow=document.createElementNS(SVGNS,"circle");
+  glow.setAttribute("id","ledglow-"+led.id);
+  glow.setAttribute("cx",led.x); glow.setAttribute("cy",bulbY); glow.setAttribute("r",16);
+  glow.setAttribute("fill","url(#ledGlow)"); glow.style.color="#ff5252"; glow.style.opacity=0;
+  g.appendChild(glow);
+
+  const bulb=document.createElementNS(SVGNS,"circle");
+  bulb.setAttribute("id","ledbulb-"+led.id);
+  bulb.setAttribute("cx",led.x); bulb.setAttribute("cy",bulbY); bulb.setAttribute("r",7);
+  bulb.setAttribute("fill","#3a1414"); bulb.setAttribute("stroke","#1a0808"); bulb.setAttribute("stroke-width","1.4");
+  g.appendChild(bulb);
+
+  const lbl=document.createElementNS(SVGNS,"text");
+  lbl.setAttribute("x",led.x); lbl.setAttribute("y",labelY); lbl.setAttribute("text-anchor","middle"); lbl.setAttribute("class","lbl");
+  lbl.textContent=led.label;
+  g.appendChild(lbl);
+
+  makePin(g,led.x,pinY,led.node,`${led.label} input`,3.6,"#8f8a76");
+}
+
+
+
+/* ============================= WIRES ============================= */
+function handlePinClick(node,x,y,el){
+  if(!pendingWire){
+    pendingWire={node,x,y,el};
+    highlightPending(el,true);
+    flashStatus(`Wire started at this pin. Click a second connection point to finish (or click the same pin again to cancel).`,false);
+    return;
+  }
+  if(pendingWire.el===el){
+    // clicked the exact same pin again: cancel
+    highlightPending(pendingWire.el,false);
+    pendingWire=null;
+    flashStatus("Wire cancelled.",false);
+    return;
+  }
+  const a=pendingWire;
+  const b={node,x,y,el};
+  highlightPending(a.el,false);
+  pendingWire=null;
+  pushUndo();
+  addWire(a,b,currentWireColor);
+}
+
+// Bright, unmissable "this pin is the active end of a wire being drawn" state.
+function highlightPending(el,on){
+  if(!el) return;
+  if(on){
+    el.setAttribute("fill","#fff700");
+    el.setAttribute("r", Number(el.dataset.origR)+3.5);
+    el.classList.add("pinPending");
+  } else {
+    restorePinAppearance(el);
+  }
+}
+// Restores a pin to either its default look, or its "connected" look if it's
+// still part of one or more existing wires.
+function restorePinAppearance(el){
+  el.classList.remove("pinPending");
+  const w=wires.find(w=> w.aEl===el || w.bEl===el);
+  if(w){
+    el.setAttribute("fill",w.color);
+    el.setAttribute("r", Number(el.dataset.origR)+1.4);
+    el.classList.add("connected");
+  } else {
+    el.setAttribute("fill", el.dataset.orig);
+    el.setAttribute("r", el.dataset.origR);
+    el.classList.remove("connected");
+  }
+}
+// Full re-sync of every pin's fill/size from the current wire list. Used after
+// any wire is added or removed so connection state is always visually obvious.
+function refreshAllPinVisuals(){
+  document.querySelectorAll(".pin").forEach(el=> restorePinAppearance(el));
+}
+
+function addWire(a,b,color){
+  const midX=(a.x+b.x)/2;
+  const path=`M ${a.x} ${a.y} L ${midX} ${a.y} L ${midX} ${b.y} L ${b.x} ${b.y}`;
+  const shadow=document.createElementNS(SVGNS,"path");
+  shadow.setAttribute("d",path); shadow.setAttribute("class","wireshadow"); shadow.setAttribute("stroke-width",7);
+  shadow.setAttribute("transform","translate(1.5,2.5)");
+  const line=document.createElementNS(SVGNS,"path");
+  line.setAttribute("d",path); line.setAttribute("class","wireline"); line.setAttribute("stroke",color); line.setAttribute("stroke-width",5);
+
+  const wire={a,b,color,el:line,shadowEl:shadow,aEl:a.el,bEl:b.el};
+  const idx=wires.length;
+  line.addEventListener("click",(e)=>{ e.stopPropagation(); selectWire(idx); });
+  line.addEventListener("mouseenter",()=>{
+    // Bring this wire's shadow+line to the very front so its full path is visible
+    // even if another wire currently overlaps/covers part of it.
+    dyn.appendChild(wire.shadowEl);
+    dyn.appendChild(wire.el);
+  });
+  dyn.appendChild(shadow);
+  dyn.appendChild(line);
+  wires.push(wire);
+  refreshAllPinVisuals();
+  recompute();
+  flashStatus("Wire connected.",false);
+}
+function selectWire(idx){
+  if(selectedWireIdx>=0 && wires[selectedWireIdx]) wires[selectedWireIdx].el.setAttribute("stroke-dasharray","");
+  selectedWireIdx=idx;
+  wires[idx].el.setAttribute("stroke-dasharray","6,4");
+  flashStatus("Wire selected. Use 'Delete Selected Wire' to remove it.",false);
+}
+document.getElementById("deleteWireBtn").addEventListener("click",()=>{
+  if(selectedWireIdx<0 || !wires[selectedWireIdx]) { flashStatus("No wire selected.",true); return; }
+  pushUndo();
+  const w=wires[selectedWireIdx];
+  w.el.remove(); w.shadowEl.remove();
+  wires.splice(selectedWireIdx,1);
+  selectedWireIdx=-1;
+  refreshAllPinVisuals();
+  recompute();
+});
+document.getElementById("clearWiresBtn").addEventListener("click",()=>{
+  if(wires.length===0){ flashStatus("No wires to clear.",true); return; }
+  pushUndo();
+  wires.forEach(w=>{ w.el.remove(); w.shadowEl.remove(); });
+  wires=[]; selectedWireIdx=-1;
+  refreshAllPinVisuals();
+  recompute();
+});
+
+/* ============================= UNDO ============================= */
+const undoStack=[];
+const UNDO_LIMIT=50;
+
+function snapshotState(){
+  return {
+    wires: wires.map(w=>({node1:w.a.node,x1:w.a.x,y1:w.a.y,node2:w.b.node,x2:w.b.x,y2:w.b.y,color:w.color})),
+    switches: switches.map(s=>({id:s.id,state:s.state})),
+    ics: placedICs.map(ic=> ic ? {slotIdx:ic.slotIdx,type:ic.type} : null),
+    powerOn
+  };
+}
+function pushUndo(){
+  undoStack.push(snapshotState());
+  if(undoStack.length>UNDO_LIMIT) undoStack.shift();
+  updateUndoBtn();
+}
+function findPinElement(node,x,y){
+  // Search newest-first: if an IC pin and the breadboard hole beneath it share the
+  // same node+coordinates, the IC pin (registered later / drawn on top) should win
+  // so a restored wire's connected-ring is visible, not hidden under the chip.
+  for(let i=statePins.length-1;i>=0;i--){
+    const sp=statePins[i];
+    if(sp.node===node && Number(sp.dotEl.dataset.x)===x && Number(sp.dotEl.dataset.y)===y) return sp.dotEl;
+  }
+  return null;
+}
+function restoreState(snap){
+  // wires + selection
+  wires.forEach(w=>{ w.el.remove(); w.shadowEl.remove(); });
+  wires=[]; selectedWireIdx=-1;
+  // ICs
+  placedICs.forEach((ic,idx)=>{ if(ic) removeICCore(idx); });
+  for(let i=statePins.length-1;i>=0;i--){ if(!statePins[i].dotEl.isConnected) statePins.splice(i,1); }
+  snap.ics.forEach(entry=>{ if(entry) placeICAtSlot(entry.type,entry.slotIdx); });
+  updateSlotGuides();
+  // switches
+  snap.switches.forEach(s=>{
+    const sw=switches.find(x=>x.id===s.id);
+    if(!sw) return;
+    sw.state=s.state;
+    positionKnob(document.getElementById("swknob-"+s.id),sw);
+  });
+  // power
+  powerOn=snap.powerOn;
+  document.getElementById("powerBtn").textContent = powerOn? "⏻ POWER: ON":"⏻ POWER: OFF";
+  document.getElementById("powerKnob").setAttribute("y", powerOn? (118+16):(118+38));
+  document.getElementById("powerKnob").setAttribute("fill", powerOn? "#3fae5c":"var(--red)");
+  // wires (rebuilt last, now that ICs exist again so their pins can be found)
+  snap.wires.forEach(w=>{
+    const aEl=findPinElement(w.node1,w.x1,w.y1);
+    const bEl=findPinElement(w.node2,w.x2,w.y2);
+    if(!aEl||!bEl) return; // safety: skip if a pin no longer exists (shouldn't normally happen)
+    addWire({node:w.node1,x:w.x1,y:w.y1,el:aEl},{node:w.node2,x:w.x2,y:w.y2,el:bEl},w.color);
+  });
+  refreshAllPinVisuals();
+  recompute();
+}
+function undo(){
+  if(undoStack.length===0){ flashStatus("Nothing to undo.",true); return; }
+  const snap=undoStack.pop();
+  restoreState(snap);
+  updateUndoBtn();
+  flashStatus("Undid last action.",false);
+}
+function updateUndoBtn(){
+  const btn=document.getElementById("undoBtn");
+  if(btn) btn.disabled = undoStack.length===0;
+}
+document.getElementById("undoBtn").addEventListener("click",undo);
+window.addEventListener("keydown",(e)=>{
+  if((e.ctrlKey||e.metaKey) && e.key.toLowerCase()==="z"){
+    e.preventDefault();
+    undo();
+  }
+});
+
+/* ============================= LOGIC ENGINE ============================= */
+function recompute(){
+  for(let i=statePins.length-1;i>=0;i--){ if(!statePins[i].dotEl.isConnected) statePins.splice(i,1); }
+  const parent={};
+  function find(x){
+    if(!(x in parent)) parent[x]=x;
+    let root=x;
+    while(parent[root]!==root) root=parent[root];
+    while(parent[x]!==root){ const next=parent[x]; parent[x]=root; x=next; }
+    return root;
+  }
+  function union(a,b){ const ra=find(a), rb=find(b); if(ra!==rb) parent[ra]=rb; }
+
+  wires.forEach(w=>union(w.a.node,w.b.node));
+  allNodeIds.forEach(id=>find(id));
+
+  const netValue={};
+  const sourceRoots=new Set();
+  const conflict=new Set();
+
+  function setSource(nodeId,val){
+    const r=find(nodeId);
+    if(val===null) return;
+    if(netValue[r]===undefined){ netValue[r]=val; sourceRoots.add(r); }
+    else if(netValue[r]!==val){ conflict.add(r); }
+    else sourceRoots.add(r);
+  }
+  setSource("gnd_terminal",0);
+  setSource("vcc_terminal", powerOn?1:0);
+  if(powerOn){
+    switches.forEach(sw=> setSource(sw.node, sw.state?1:0));
+  } else {
+    switches.forEach(sw=> setSource(sw.node,0));
+  }
+
+  function getVal(nodeId){ const r=find(nodeId); const v=netValue[r]; return (v===undefined)?0:v; }
+
+  for(let iter=0; iter<6; iter++){
+    const gateWrites={};
+    placedICs.forEach(ic=>{
+      if(!ic) return;
+      const vccNode=ic.pinNodeMap[ic.def.vcc], gndNode=ic.pinNodeMap[ic.def.gnd];
+      const gndOk = netValue[find(gndNode)]===0;
+      ic.powered = !!(powerOn && netValue[find(vccNode)]===1 && gndOk);
+      const warnEl=document.getElementById("warn-"+ic.slotIdx);
+      if(warnEl) warnEl.textContent = (powerOn && !ic.powered) ? "IC NOT POWERED — CONNECT VCC & GND" : "";
+      if(!ic.powered) return;
+      ic.def.gates.forEach(gate=>{
+        const an=ic.pinNodeMap[gate.a];
+        const bn=gate.b?ic.pinNodeMap[gate.b]:undefined;
+        const yn=ic.pinNodeMap[gate.y];
+        const out=ic.def.fn(getVal(an), bn?getVal(bn):undefined);
+        const r=find(yn);
+        if(!gateWrites[r]) gateWrites[r]=new Set();
+        gateWrites[r].add(out);
+      });
+    });
+    Object.keys(gateWrites).forEach(r=>{
+      const set=gateWrites[r];
+      if(set.size>1){ conflict.add(r); return; }
+      const val=[...set][0];
+      if(sourceRoots.has(r)){
+        if(netValue[r]!==val) conflict.add(r);
+      } else {
+        netValue[r]=val;
+      }
+    });
+  }
+
+  // apply LEDs
+  leds.forEach(led=>{
+    const r=find(led.node);
+    const isConflict=conflict.has(r);
+    const on = powerOn && !isConflict && netValue[r]===1;
+    const bulb=document.getElementById("ledbulb-"+led.id);
+    const glow=document.getElementById("ledglow-"+led.id);
+    if(isConflict){
+      bulb.setAttribute("fill","#5533aa"); glow.style.opacity=0.5; glow.style.color="#a06bff";
+    } else if(on){
+      bulb.setAttribute("fill","#ff4b3e"); glow.style.opacity=0.85; glow.style.color="#ff4b3e";
+    } else {
+      bulb.setAttribute("fill","#3a1414"); glow.style.opacity=0;
+    }
+  });
+
+  updateSlotGuides();
+
+  // power lamp
+  const lamp=document.getElementById("powerLamp");
+  if(lamp) lamp.setAttribute("fill", powerOn? "#ffb13e":"#3a1414");
+
+  // wires: brighten if net is HIGH
+  wires.forEach(w=>{
+    const r=find(w.a.node);
+    const isConflict=conflict.has(r);
+    w.el.setAttribute("stroke", isConflict? "#b967ff" : w.color);
+    w.el.style.opacity = (powerOn && netValue[r]===1) ? 1 : 0.82;
+  });
+
+  warnBanner.style.display = conflict.size>0 ? "block" : "none";
+
+  // Live signal glow on EVERY pin on the board (breadboard holes, switch/LED/terminal
+  // pins, and every IC pin) so a connection's actual effect is always visible, not just
+  // at the final LED.
+  statePins.forEach(sp=>{
+    const r=find(sp.node);
+    if(conflict.has(r)){ sp.hitEl.style.fill="rgba(186,107,255,0.4)"; return; }
+    const v=netValue[r];
+    sp.hitEl.style.fill = (powerOn && v===1) ? "rgba(90,255,130,0.35)" : "transparent";
+  });
+
+  // Power-status border on each placed IC: red = not properly powered, green = VCC+GND
+  // are actually wired and the chip is live.
+  placedICs.forEach(ic=>{
+    if(!ic) return;
+    const border=document.getElementById("icborder-"+ic.slotIdx);
+    if(border) border.setAttribute("stroke", ic.powered ? "#3fae5c" : "#8a3a3a");
+  });
+
+  window.__trainerState={find,netValue,sourceRoots,conflict};
+}
+
+/* ============================= UI: TOOLBAR ============================= */
+const icSelect=document.getElementById("icSelect");
+Object.keys(IC_LIBRARY).forEach(key=>{
+  const opt=document.createElement("option");
+  opt.value=key; opt.textContent=`${key} — ${IC_LIBRARY[key].name}`;
+  icSelect.appendChild(opt);
+});
+function renderIcInfo(){
+  const def=IC_LIBRARY[icSelect.value];
+  const box=document.getElementById("icInfoBox");
+  let names=def.pinNames;
+  let lines=[`${icSelect.value}`,`${def.name}`,``,`        ┌─────────┐`];
+  for(let i=1;i<=7;i++){
+    const left=String(names[i]).padEnd(3," ");
+    const rightPin=15-i;
+    const right=names[rightPin];
+    lines.push(` ${left}│${i}       ${rightPin<10?" "+rightPin:rightPin}│ ${right}`);
+  }
+  lines.push(`        └─────────┘`);
+  lines.push(``,`VCC = Pin ${def.vcc}   GND = Pin ${def.gnd}`);
+  box.textContent=lines.join("\n");
+}
+icSelect.addEventListener("change",renderIcInfo);
+renderIcInfo();
+
+document.getElementById("placeIcBtn").addEventListener("click",()=> placeIC(icSelect.value));
+
+const colorMap={"Red":"#E53935","Black":"#151515","Green":"#22A447","Blue":"#2474D8","Yellow":"#F2C94C","Orange":"#F2994A","White":"#f4f4f0"};
+const swatchesEl=document.getElementById("swatches");
+Object.entries(colorMap).forEach(([name,hex],i)=>{
+  const s=document.createElement("div");
+  s.className="swatch"+(hex===currentWireColor?" sel":"");
+  s.style.background=hex; s.title=name;
+  s.addEventListener("click",()=>{
+    currentWireColor=hex;
+    document.querySelectorAll(".swatch").forEach(el=>el.classList.remove("sel"));
+    s.classList.add("sel");
+  });
+  swatchesEl.appendChild(s);
+});
+
+function togglePower(){
+  pushUndo();
+  powerOn=!powerOn;
+  document.getElementById("powerBtn").textContent = powerOn? "⏻ POWER: ON":"⏻ POWER: OFF";
+  document.getElementById("powerKnob").setAttribute("y", powerOn? (118+16): (118+38));
+  document.getElementById("powerKnob").setAttribute("fill", powerOn? "#3fae5c":"var(--red)");
+  recompute();
+}
+document.getElementById("powerBtn").addEventListener("click",togglePower);
+
+document.getElementById("resetBtn").addEventListener("click",()=>{
+  pushUndo();
+  wires.forEach(w=>{ w.el.remove(); w.shadowEl.remove(); });
+  wires=[]; selectedWireIdx=-1;
+  refreshAllPinVisuals();
+  switches.forEach(sw=>{ sw.state=false; positionKnob(document.getElementById("swknob-"+sw.id),sw); });
+  placedICs.forEach((ic,idx)=>{ if(ic) removeICCore(idx); });
+  powerOn=false;
+  document.getElementById("powerBtn").textContent="⏻ POWER: OFF";
+  document.getElementById("powerKnob").setAttribute("y",118+38);
+  document.getElementById("powerKnob").setAttribute("fill","var(--red)");
+  document.getElementById("ttResult").textContent="Not run yet.";
+  recompute();
+  flashStatus("Board reset. (Undo is available if this was a mistake.)",false);
+});
+
+function flashStatus(msg,warn){
+  statusEl.textContent=msg;
+  statusEl.classList.toggle("warn",!!warn);
+}
+
+/* ============================= ZOOM / PAN ============================= */
+let scale=1, tx=0, ty=0;
+function applyTransform(){ viewport.setAttribute("transform",`translate(${tx},${ty}) scale(${scale})`); }
+document.getElementById("zoomIn").addEventListener("click",()=>{ scale=Math.min(3,scale*1.2); applyTransform(); });
+document.getElementById("zoomOut").addEventListener("click",()=>{ scale=Math.max(0.5,scale/1.2); applyTransform(); });
+document.getElementById("zoomReset").addEventListener("click",()=>{ scale=1; tx=0; ty=0; applyTransform(); });
+
+svg.addEventListener("wheel",(e)=>{
+  e.preventDefault();
+  const delta = e.deltaY<0 ? 1.1 : 0.9;
+  scale=Math.max(0.5,Math.min(3,scale*delta));
+  applyTransform();
+},{passive:false});
+
+let dragging=false, dragStart=null;
+svg.addEventListener("mousedown",(e)=>{
+  if(e.target.classList && e.target.classList.contains("pin")) return;
+  if(e.target.tagName==="path") return;
+  dragging=true; dragStart={x:e.clientX-tx,y:e.clientY-ty};
+  svg.classList.add("dragging");
+});
+window.addEventListener("mousemove",(e)=>{
+  if(dragging){ tx=e.clientX-dragStart.x; ty=e.clientY-dragStart.y; applyTransform(); }
+});
+window.addEventListener("mouseup",()=>{ dragging=false; svg.classList.remove("dragging"); });
+
+svg.addEventListener("click",(e)=>{
+  if(e.target===svg || e.target.tagName==="rect"){
+    if(selectedWireIdx>=0 && wires[selectedWireIdx]){ wires[selectedWireIdx].el.setAttribute("stroke-dasharray",""); selectedWireIdx=-1; }
+  }
+});
+
+/* ============================= TRUTH TABLE TEST ============================= */
+document.getElementById("ttBtn").addEventListener("click",()=>{
+  if(!powerOn){ flashStatus("Turn power ON before testing.",true); return; }
+  const usedSwitches = switches.filter(sw => wires.some(w=> w.a.node===sw.node || w.b.node===sw.node)).slice(0,4);
+  let targetLed=null;
+  for(const led of leds){
+    if(wires.some(w=> w.a.node===led.node || w.b.node===led.node)){ targetLed=led; break; }
+  }
+  if(usedSwitches.length===0 || !targetLed){
+    document.getElementById("ttResult").textContent="Wire at least one switch and one LED first.";
+    return;
+  }
+  const original=usedSwitches.map(sw=>sw.state);
+  const n=usedSwitches.length;
+  const headerLen = n*2+2+targetLed.label.length;
+  let out=usedSwitches.map(sw=>sw.label).join(" ")+` | ${targetLed.label}\n`+"-".repeat(headerLen)+"\n";
+  for(let combo=0; combo< (1<<n); combo++){
+    usedSwitches.forEach((sw,i)=>{ sw.state = !!((combo>>(n-1-i)) & 1); });
+    recompute();
+    const r=window.__trainerState.find(targetLed.node);
+    const val = window.__trainerState.conflict.has(r) ? "X" : (window.__trainerState.netValue[r]===1?1:0);
+    out += usedSwitches.map(sw=> sw.state?1:0).join(" ")+"   |   "+val+"\n";
+  }
+  usedSwitches.forEach((sw,i)=>{ sw.state=original[i]; positionKnob(document.getElementById("swknob-"+sw.id),sw); });
+  recompute();
+  document.getElementById("ttResult").textContent=out;
+});
+
+/* ============================= INIT ============================= */
+buildBreadboard();
+buildSlotGuides();
+buildPowerSection();
+buildSwitches();
+buildLEDs();
+recompute();
+applyTransform();
+
+window.__trainer = { getState: ()=>({ placedICs, wires, switches, leds, powerOn }) };
+
+})();
+</script>
+</body>
+</html>
