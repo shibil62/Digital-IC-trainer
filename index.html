@@ -118,6 +118,14 @@
     #zoomCtl{bottom:8px;right:8px;}
     #zoomCtl button{width:42px;height:42px;}
   }
+  /* ---------- Watermark (inside side panel) ---------- */
+  #sidepanel{display:flex;flex-direction:column;}
+  #watermark{
+    margin-top:auto;padding-top:14px;text-align:right;flex:0 0 auto;
+    font-family:'SF Pro Text','SF Pro Display',-apple-system,Arial,sans-serif;
+    font-size:12px;letter-spacing:.4px;color:rgba(231,231,231,.7);
+    user-select:none;white-space:nowrap;
+  }
 </style>
 </head>
 <body>
@@ -210,6 +218,7 @@
       <h2>Truth Table Test</h2>
       <button id="ttBtn" class="primary" style="width:100%;">Test All Combinations</button>
       <div id="ttResult">Not run yet.</div>
+      <div id="watermark">Created by Shibil P A &middot; 2026</div>
     </div>
   </div>
 </div>
@@ -493,7 +502,7 @@ function buildSwitches(){
   const g=mk("g",{});
   const baseX=78, baseY=560, w=680, h=140;
   mk("rect",{x:baseX,y:baseY,width:w,height:h,rx:6,fill:"#123a2d",stroke:"#0a2419"},g);
-  mk("text",{x:baseX,y:baseY-8,class:"lbl",fill:"#dfe6de"},g).textContent="LOGIC SWITCHES  —  3 connection points per switch (same signal)";
+  mk("text",{x:baseX,y:baseY-8,class:"lbl",fill:"#dfe6de"},g).textContent="LOGIC SWITCHES";
   const names=["A","B","C","D","E","F","G","H"];
   const spacing=(w-70)/(names.length-1);
   names.forEach((name,i)=>{
@@ -507,7 +516,6 @@ function buildSwitches(){
 }
 function drawSwitch(g,sw,panelTop){
   const pinY=panelTop+26, trackY=sw.y;
-  mk("line",{x1:sw.x-24,x2:sw.x+24,y1:pinY+13,y2:pinY+13,stroke:"#555","stroke-width":1.6},g);
   mk("line",{x1:sw.x,x2:sw.x,y1:pinY+13,y2:trackY-12,stroke:"#555","stroke-width":1.6},g);
   const track=mk("rect",{x:sw.x-26,y:trackY-12,width:52,height:24,rx:12,fill:"#0e0e0e",stroke:"#333"},g);
   track.style.cursor="pointer";
@@ -518,7 +526,7 @@ function drawSwitch(g,sw,panelTop){
   positionKnob(knob,sw);
   const lbl=mk("text",{x:sw.x,y:panelTop+128,class:"lbl","font-weight":700,"text-anchor":"middle"},g);
   lbl.style.fontSize="13px"; lbl.textContent=sw.label;
-  [-24,0,24].forEach(dx=> makePin(g,sw.x+dx,pinY,sw.node,`Logic Input ${sw.label}`,4.4,"#8f8a76"));
+  makePin(g,sw.x,pinY,sw.node,`Logic Input ${sw.label}`,4.4,"#8f8a76");
 }
 function positionKnob(knob,sw){ knob.setAttribute("cx", sw.state? sw.x+13 : sw.x-13); knob.setAttribute("fill", sw.state? "#8fe0a6":"#d8d8d8"); }
 function toggleSwitch(id){
@@ -534,7 +542,7 @@ function buildLEDs(){
   const g=mk("g",{});
   const baseX=798, baseY=560, w=702, h=140;
   mk("rect",{x:baseX,y:baseY,width:w,height:h,rx:6,fill:"#123a2d",stroke:"#0a2419"},g);
-  mk("text",{x:baseX,y:baseY-8,class:"lbl",fill:"#dfe6de"},g).textContent="LED OUTPUT  —  3 connection points per LED (same signal)";
+  mk("text",{x:baseX,y:baseY-8,class:"lbl",fill:"#dfe6de"},g).textContent="LED OUTPUT";
   const count=8, spacing=(w-80)/(count-1);
   for(let i=1;i<=count;i++){
     const x=baseX+40+(i-1)*spacing, y=baseY+88, node="led_"+i;
@@ -547,14 +555,13 @@ function buildLEDs(){
 }
 function drawLED(g,led,panelTop){
   const pinY=panelTop+26, bulbY=led.y;
-  mk("line",{x1:led.x-24,x2:led.x+24,y1:pinY+13,y2:pinY+13,stroke:"#555","stroke-width":1.6},g);
   mk("line",{x1:led.x,x2:led.x,y1:pinY+13,y2:bulbY-10,stroke:"#555","stroke-width":1.6},g);
   const glow=mk("circle",{id:"ledglow-"+led.id,cx:led.x,cy:bulbY,r:20,fill:"url(#ledGlow)"},g);
   glow.style.color="#ff5252"; glow.style.opacity=0; glow.style.pointerEvents="none";
   mk("circle",{id:"ledbulb-"+led.id,cx:led.x,cy:bulbY,r:9,fill:"#3a1414",stroke:"#1a0808","stroke-width":1.4},g);
   const lbl=mk("text",{x:led.x,y:panelTop+128,"text-anchor":"middle",class:"lbl"},g);
   lbl.style.fontSize="11px"; lbl.textContent=led.label;
-  [-24,0,24].forEach(dx=> makePin(g,led.x+dx,pinY,led.node,`${led.label} input`,4.4,"#8f8a76"));
+  makePin(g,led.x,pinY,led.node,`${led.label} input`,4.4,"#8f8a76");
 }
 
 /* ============================= WIRES ============================= */
