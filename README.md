@@ -232,7 +232,7 @@ Created as an educational digital electronics project.
 
 ## 📄 License
 
-This project is intended for educational and learning purposes.
+This project is intended for educational and learning purposes. 
 
 Feel free to explore, learn from, and build upon the project with appropriate attribution.
 
